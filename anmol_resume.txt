@@ -1,0 +1,26 @@
+=== RESUME OF ANMOL SAHARAWAT ===
+
+1. PROFESSIONAL SUMMARY
+Anmol Saharawat is an aspiring Software Engineer and Data Professional with hands-on experience in Python, web development, cloud integration, and local machine learning models. Currently working as an AI/ML developer intern.
+
+2. EDUCATION
+- Bachelor of Technology (B.Tech) in Computer Science & Engineering (CSE)
+- Focus areas: Software Engineering, Database Systems, Artificial Intelligence, and Web Technologies.
+
+3. TECHNICAL SKILLS
+- Programming Languages: Python, JavaScript, HTML5, CSS3, SQL.
+- Frameworks & Libraries: Flask, scikit-learn, joblib, Google GenAI SDK.
+- Databases & Vector Stores: Qdrant Vector DB, SQLite.
+- Tools & Core Concepts: REST APIs, API Security, Semantic Search, Retrieval-Augmented Generation (RAG).
+
+4. WORK EXPERIENCE / INTERNSHIP
+- Company: Evaluate IQ
+- Role: AI/ML Developer Intern
+- Duration: 2 Months (8 Weeks)
+- Schedule: 25 Hours per week.
+- Key Accomplishments:
+  - Designed and developed a secure Hybrid Chatbot API using Flask and HTML/CSS.
+  - Implemented client-side API Key validation using request headers to prevent key exposure.
+  - Built and integrated an offline custom Machine Learning Sentiment Analysis model using scikit-learn.
+  - Added multimodal (Image Upload) support using the Google Gemini model.
+  - Currently building local RAG pipelines integrated with the Qdrant vector database.
