@@ -4,3 +4,4 @@ qdrant-client
 joblib
 scikit-learn
 gunicorn
+flask-cors
