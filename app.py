@@ -6,18 +6,32 @@ import os
 import joblib
 import base64
 import time
+
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue
+
 from guardrails_engine import LLMGuardrailEngine
+
+
+# ==========================================================
+# GUARDRAILS
+# ==========================================================
 
 guardrails = LLMGuardrailEngine()
 
+
+# ==========================================================
+# GEMINI MODEL CACHE / RETRY
+# ==========================================================
+
 _cached_working_model = None
 _dead_models = {}
+
 DEAD_MODEL_TTL = 60
 
 
 def generate_with_retry(client, contents, config=None):
+
     global _cached_working_model, _dead_models
 
     models_to_try = [
@@ -27,42 +41,62 @@ def generate_with_retry(client, contents, config=None):
         "gemini-2.5-flash",
     ]
 
-    if _cached_working_model and _cached_working_model in models_to_try:
-        models_to_try = [_cached_working_model] + [
-            m for m in models_to_try if m != _cached_working_model
+    if (
+        _cached_working_model
+        and _cached_working_model in models_to_try
+    ):
+        models_to_try = [
+            _cached_working_model
+        ] + [
+            m
+            for m in models_to_try
+            if m != _cached_working_model
         ]
 
     now = time.time()
     last_exception = None
 
     for model_name in models_to_try:
+
         if model_name in _dead_models:
-            if now - _dead_models[model_name] < DEAD_MODEL_TTL:
+
+            if (
+                now - _dead_models[model_name]
+                < DEAD_MODEL_TTL
+            ):
                 print(
                     f"[~] Skipping blacklisted model "
-                    f"'{model_name}' (quota cooldown)"
+                    f"'{model_name}'"
                 )
                 continue
+
             del _dead_models[model_name]
 
         try:
+
             if config:
+
                 response = client.models.generate_content(
                     model=model_name,
                     contents=contents,
                     config=config,
                 )
+
             else:
+
                 response = client.models.generate_content(
                     model=model_name,
                     contents=contents,
                 )
 
             _cached_working_model = model_name
+
             return response
 
         except Exception as e:
+
             last_exception = e
+
             err_str = str(e)
 
             print(
@@ -75,14 +109,17 @@ def generate_with_retry(client, contents, config=None):
                 or "RESOURCE_EXHAUSTED" in err_str
                 or "quota" in err_str.lower()
             ):
+
                 _dead_models[model_name] = now
+
                 print(
-                    f"[!] Model '{model_name}' blacklisted "
-                    f"for {DEAD_MODEL_TTL}s"
+                    f"[!] Model '{model_name}' "
+                    f"blacklisted for "
+                    f"{DEAD_MODEL_TTL}s"
                 )
 
     print(
-        f"[!!!] ALL GEMINI MODELS FAILED. "
+        "[!!!] ALL GEMINI MODELS FAILED. "
         f"Last error: {last_exception}"
     )
 
@@ -98,65 +135,134 @@ def generate_with_retry(client, contents, config=None):
     )()
 
 
+# ==========================================================
+# FLASK APP
+# ==========================================================
+
 app = Flask(__name__)
 
-# CORS allows the Vercel frontend to call the Render backend.
 CORS(app)
+
+
+# ==========================================================
+# CONFIGURATION
+# ==========================================================
 
 CUSTOM_API_KEY = "anmol123"
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv(
+    "GEMINI_API_KEY"
+)
+
 
 QDRANT_URL = (
     "https://fe05543a-c601-4ea0-ab59-3e41fffeab7f."
     "eu-west-1-0.aws.cloud.qdrant.io"
 )
 
-QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+QDRANT_API_KEY = os.getenv(
+    "QDRANT_API_KEY"
+)
+
+
+# ==========================================================
+# QDRANT CACHE
+# ==========================================================
 
 _local_qdrant_cache = None
 _qdrant_cloud_cache = None
 
 
 def get_qdrant_store(gemini_client):
-    global _local_qdrant_cache, _qdrant_cloud_cache
 
-    target_coll = "anmol_resume_collection_3072"
+    global _local_qdrant_cache
+    global _qdrant_cloud_cache
+
+    target_coll = (
+        "anmol_resume_collection_3072"
+    )
+
 
     if _qdrant_cloud_cache is not None:
-        return _qdrant_cloud_cache, target_coll
+
+        return (
+            _qdrant_cloud_cache,
+            target_coll
+        )
+
 
     try:
+
         q_cloud = QdrantClient(
             url=QDRANT_URL,
             api_key=QDRANT_API_KEY,
             timeout=2,
         )
 
-        if q_cloud.collection_exists(target_coll):
-            _qdrant_cloud_cache = q_cloud
-            print("[+] Qdrant Cloud connected and cached.")
-            return q_cloud, target_coll
 
-        if q_cloud.collection_exists("anmol_resume_collection"):
+        if q_cloud.collection_exists(
+            target_coll
+        ):
+
             _qdrant_cloud_cache = q_cloud
-            return q_cloud, "anmol_resume_collection"
+
+            print(
+                "[+] Qdrant Cloud connected "
+                "and cached."
+            )
+
+            return (
+                q_cloud,
+                target_coll
+            )
+
+
+        if q_cloud.collection_exists(
+            "anmol_resume_collection"
+        ):
+
+            _qdrant_cloud_cache = q_cloud
+
+            return (
+                q_cloud,
+                "anmol_resume_collection"
+            )
+
 
     except Exception as cloud_err:
+
         print(
             "[-] Qdrant Cloud unavailable "
             f"({str(cloud_err)[:60]}). "
             "Using Local In-Memory Qdrant..."
         )
 
+
     if _local_qdrant_cache is not None:
-        return _local_qdrant_cache, target_coll
 
-    print("[+] Building Local In-Memory Qdrant Store...")
+        return (
+            _local_qdrant_cache,
+            target_coll
+        )
 
-    from qdrant_client.models import VectorParams, Distance, PointStruct
 
-    q_mem = QdrantClient(":memory:")
+    print(
+        "[+] Building Local In-Memory "
+        "Qdrant Store..."
+    )
+
+
+    from qdrant_client.models import (
+        VectorParams,
+        Distance,
+        PointStruct
+    )
+
+
+    q_mem = QdrantClient(
+        ":memory:"
+    )
+
 
     q_mem.create_collection(
         collection_name=target_coll,
@@ -166,16 +272,33 @@ def get_qdrant_store(gemini_client):
         ),
     )
 
-    for field in ["category", "role", "company", "source_file"]:
+
+    for field in [
+        "category",
+        "role",
+        "company",
+        "source_file"
+    ]:
+
         q_mem.create_payload_index(
             collection_name=target_coll,
             field_name=field,
             field_schema="keyword",
         )
 
-    if os.path.exists("anmol_resume.txt"):
-        with open("anmol_resume.txt", "r", encoding="utf-8") as f:
+
+    if os.path.exists(
+        "anmol_resume.txt"
+    ):
+
+        with open(
+            "anmol_resume.txt",
+            "r",
+            encoding="utf-8"
+        ) as f:
+
             raw_text = f.read()
+
 
         sections = [
             s.strip()
@@ -183,35 +306,61 @@ def get_qdrant_store(gemini_client):
             if s.strip()
         ]
 
+
         points = []
 
-        for idx, sec in enumerate(sections):
+
+        for idx, sec in enumerate(
+            sections
+        ):
+
             cat = "general"
 
-            if "summary" in sec.lower() or "saharawat" in sec.lower():
-                cat = "summary"
-            elif (
-                "work experience" in sec.lower()
-                or "evaluate iq" in sec.lower()
-                or "internship" in sec.lower()
+
+            if (
+                "summary" in sec.lower()
+                or "saharawat" in sec.lower()
             ):
+
+                cat = "summary"
+
+
+            elif (
+                "work experience"
+                in sec.lower()
+                or "evaluate iq"
+                in sec.lower()
+                or "internship"
+                in sec.lower()
+            ):
+
                 cat = "work_experience"
+
+
             elif (
                 "education" in sec.lower()
                 or "b.tech" in sec.lower()
             ):
+
                 cat = "education"
+
+
             elif "skills" in sec.lower():
+
                 cat = "skills"
 
+
             vec = (
-                gemini_client.models.embed_content(
+                gemini_client
+                .models
+                .embed_content(
                     model="gemini-embedding-2",
                     contents=sec,
                 )
                 .embeddings[0]
                 .values
             )
+
 
             points.append(
                 PointStruct(
@@ -220,86 +369,173 @@ def get_qdrant_store(gemini_client):
                     payload={
                         "text": sec,
                         "category": cat,
-                        "role": "AI/ML Developer Intern",
+                        "role": (
+                            "AI/ML Developer Intern"
+                        ),
                         "company": "Evaluate IQ",
-                        "source_file": "anmol_resume.txt",
+                        "source_file": (
+                            "anmol_resume.txt"
+                        ),
                     },
                 )
             )
 
+
         if points:
+
             q_mem.upsert(
                 collection_name=target_coll,
                 points=points,
             )
 
-    _local_qdrant_cache = q_mem
-    return q_mem, target_coll
 
+    _local_qdrant_cache = q_mem
+
+    return (
+        q_mem,
+        target_coll
+    )
+
+
+# ==========================================================
+# ML MODEL
+# ==========================================================
 
 try:
-    vectorizer = joblib.load("vectorizer.joblib")
-    sentiment_model = joblib.load("sentiment_model.joblib")
+
+    vectorizer = joblib.load(
+        "vectorizer.joblib"
+    )
+
+    sentiment_model = joblib.load(
+        "sentiment_model.joblib"
+    )
+
     ml_model_loaded = True
-    print("[+] Custom ML Sentiment Model loaded successfully!")
+
+    print(
+        "[+] Custom ML Sentiment Model "
+        "loaded successfully!"
+    )
+
 
 except Exception as e:
+
     print(
         "[-] Warning: ML Model files not found. "
         f"Run train_model.py first! ({e})"
     )
+
     ml_model_loaded = False
 
 
+# ==========================================================
+# HOME
+# ==========================================================
+
 @app.route("/")
 def index():
-    return render_template("index.html")
+
+    return render_template(
+        "index.html"
+    )
 
 
-@app.route("/api/chat", methods=["POST"])
+# ==========================================================
+# CHAT API
+# ==========================================================
+
+@app.route(
+    "/api/chat",
+    methods=["POST"]
+)
 def chat():
+
     try:
+
         client_api_key = (
-            request.headers.get("X-API-KEY")
+            request.headers.get(
+                "X-API-KEY"
+            )
             or CUSTOM_API_KEY
         )
 
-        data = request.get_json() or {}
 
-        user_message = data.get("message", "").strip()
+        data = (
+            request.get_json()
+            or {}
+        )
 
-        use_rag = data.get("useRAG", False)
+
+        user_message = (
+            data.get(
+                "message",
+                ""
+            ).strip()
+        )
+
+
+        use_rag = data.get(
+            "useRAG",
+            False
+        )
+
 
         image_b64 = (
-            data.get("image", "").strip()
+            data.get(
+                "image",
+                ""
+            ).strip()
             if data.get("image")
             else ""
         )
 
+
         image_type = (
-            data.get("imageType", "").strip()
+            data.get(
+                "imageType",
+                ""
+            ).strip()
             if data.get("imageType")
             else ""
         )
 
-        if not user_message and not image_b64:
+
+        if (
+            not user_message
+            and not image_b64
+        ):
+
             return jsonify(
                 {
                     "error": (
                         "Validation Error: "
-                        "Question or Image file is required!"
+                        "Question or Image file "
+                        "is required!"
                     )
                 }
             ), 400
 
-        input_guard_res = guardrails.validate_input(user_message)
+
+        # ==================================================
+        # INPUT GUARDRAIL
+        # ==================================================
+
+        input_guard_res = (
+            guardrails.validate_input(
+                user_message
+            )
+        )
+
 
         if not input_guard_res.is_safe:
+
             print(
                 "[GUARDRAIL BLOCKED BEFORE LLM] "
                 f"[{input_guard_res.violation_category}] "
                 f"{input_guard_res.blocked_reason}"
             )
+
 
             return jsonify(
                 {
@@ -325,51 +561,101 @@ def chat():
                 }
             ), 200
 
-        active_prompt = input_guard_res.sanitized_prompt
+
+        active_prompt = (
+            input_guard_res.sanitized_prompt
+        )
+
 
         if input_guard_res.pii_detected:
+
             print(
                 "[GUARDRAIL PII REDACTED] "
-                f"Types: {input_guard_res.pii_types}"
+                f"Types: "
+                f"{input_guard_res.pii_types}"
             )
+
+
+        # ==================================================
+        # SENTIMENT MODEL
+        # ==================================================
 
         predicted_sentiment = "neutral"
 
-        if ml_model_loaded and user_message:
+
+        if (
+            ml_model_loaded
+            and user_message
+        ):
+
             try:
-                vectorized_text = vectorizer.transform(
-                    [user_message.lower()]
+
+                vectorized_text = (
+                    vectorizer.transform(
+                        [user_message.lower()]
+                    )
                 )
 
-                prediction_id = sentiment_model.predict(
-                    vectorized_text
-                )[0]
+
+                prediction_id = (
+                    sentiment_model
+                    .predict(
+                        vectorized_text
+                    )[0]
+                )
+
 
                 if prediction_id == 0:
-                    predicted_sentiment = "positive"
+
+                    predicted_sentiment = (
+                        "positive"
+                    )
+
                 elif prediction_id == 1:
-                    predicted_sentiment = "negative"
+
+                    predicted_sentiment = (
+                        "negative"
+                    )
+
                 else:
-                    predicted_sentiment = "neutral"
+
+                    predicted_sentiment = (
+                        "neutral"
+                    )
+
 
             except Exception as ml_err:
+
                 print(
                     "[-] ML Model execution error: "
                     f"{ml_err}"
                 )
 
-        actual_gemini_key = GEMINI_API_KEY
+
+        # ==================================================
+        # GEMINI CLIENT
+        # ==================================================
+
+        actual_gemini_key = (
+            GEMINI_API_KEY
+        )
+
 
         if (
             actual_gemini_key
             == "PASTE_YOUR_REAL_GEMINI_API_KEY_HERE"
         ):
-            actual_gemini_key = os.environ.get(
-                "GEMINI_API_KEY",
-                "",
+
+            actual_gemini_key = (
+                os.environ.get(
+                    "GEMINI_API_KEY",
+                    "",
+                )
             )
 
+
         if not actual_gemini_key:
+
             return jsonify(
                 {
                     "error": (
@@ -379,33 +665,90 @@ def chat():
                 }
             ), 500
 
-        client = genai.Client(api_key=actual_gemini_key)
+
+        client = genai.Client(
+            api_key=actual_gemini_key
+        )
+
+
+        # ==================================================
+        # TEMPERATURE
+        # ==================================================
 
         try:
-            temp = float(data.get("temperature", 0.7))
-        except (ValueError, TypeError):
-            temp = 0.7
 
-        use_mcp = data.get("useMCP", False)
-
-        if use_mcp and user_message:
-            print(
-                "[+] Processing request via "
-                "Universal FastMCP Server & Agent..."
+            temp = float(
+                data.get(
+                    "temperature",
+                    0.7
+                )
             )
 
+        except (
+            ValueError,
+            TypeError
+        ):
+
+            temp = 0.7
+
+
+        # ==================================================
+        # MCP MODE
+        # ==================================================
+
+        use_mcp = data.get(
+            "useMCP",
+            False
+        )
+
+
+        if (
+            use_mcp
+            and user_message
+        ):
+
+            print(
+                "[+] Processing request via "
+                "Universal FastMCP Server "
+                "& Agent..."
+            )
+
+
             try:
-                from mcp_agent import run_mcp_query
 
-                agent_res = run_mcp_query(active_prompt)
-
-                output_guard_res = guardrails.validate_output(
-                    agent_res["response"]
+                from mcp_agent import (
+                    run_mcp_query
                 )
 
+
+                agent_res = (
+                    run_mcp_query(
+                        active_prompt
+                    )
+                )
+
+
+                # ------------------------------------------
+                # OUTPUT GUARDRAIL
+                # ------------------------------------------
+
+                output_guard_res = (
+                    guardrails.validate_output(
+                        agent_res["response"]
+                    )
+                )
+
+
+                # ------------------------------------------
+                # AGENT TRACE
+                # ------------------------------------------
+
                 agent_trace = []
+
                 step = 1
 
+
+                # User Input
                 agent_trace.append(
                     {
                         "step": step,
@@ -414,104 +757,215 @@ def chat():
                         "content": active_prompt,
                     }
                 )
+
                 step += 1
 
-                tool_calls_detail = agent_res.get(
-                    "tool_calls_detail",
-                    [],
+
+                tool_calls_detail = (
+                    agent_res.get(
+                        "tool_calls_detail",
+                        [],
+                    )
                 )
 
+
+                # ------------------------------------------
+                # TOOL TRACE
+                # ------------------------------------------
+
                 for tc in tool_calls_detail:
-                    needs_approval = tc.get(
-                        "approval_required",
-                        False,
+
+                    tool_name = tc.get(
+                        "tool_name",
+                        "unknown_tool"
                     )
 
+                    tool_args = tc.get(
+                        "args",
+                        ""
+                    )
+
+                    tool_result = tc.get(
+                        "result"
+                    )
+
+                    needs_approval = tc.get(
+                        "approval_required",
+                        False
+                    )
+
+
+                    # ==================================================
+                    # APPROVAL REQUIRED TOOL
+                    # ==================================================
+
                     if needs_approval:
+
+                        # Tool Called
                         agent_trace.append(
                             {
                                 "step": step,
                                 "type": "tool_call",
                                 "label": (
                                     f"Tool Called — "
-                                    f"{tc['tool_name']}"
+                                    f"{tool_name}"
                                 ),
-                                "tool_name": tc["tool_name"],
+                                "tool_name": tool_name,
                                 "content": (
-                                    f"Tool : {tc['tool_name']}\n"
-                                    f"Args : {tc['args']}"
+                                    f"Tool : {tool_name}\n"
+                                    f"Args : {tool_args}"
                                 ),
                             }
                         )
+
                         step += 1
 
+
+                        # Policy
                         agent_trace.append(
                             {
                                 "step": step,
                                 "type": "policy",
                                 "label": "Policy",
-                                "tool_name": tc["tool_name"],
-                                "content": "requires_approval",
+                                "tool_name": tool_name,
+                                "content": (
+                                    "requires_approval"
+                                ),
                             }
                         )
+
                         step += 1
 
+
+                        # Approval Required
                         agent_trace.append(
                             {
                                 "step": step,
                                 "type": "approval_required",
-                                "label": "Approval Required",
-                                "tool_name": tc["tool_name"],
+                                "label": (
+                                    "Approval Required"
+                                ),
+                                "tool_name": tool_name,
                                 "content": (
-                                    f"Tool '{tc['tool_name']}' "
+                                    f"Tool '{tool_name}' "
                                     "needs your approval "
                                     "before executing.\n"
-                                    f"Args: {tc['args']}"
+                                    f"Args: {tool_args}"
                                 ),
                             }
                         )
+
                         step += 1
+
+
+                        # --------------------------------------
+                        # IMPORTANT FIX
+                        # --------------------------------------
+                        # The current MCP agent has already
+                        # executed the tool and placed the
+                        # result in tc["result"].
+                        #
+                        # Therefore we show that actual
+                        # result instead of writing "pending".
+                        # --------------------------------------
 
                         agent_trace.append(
                             {
                                 "step": step,
                                 "type": "user_decision",
-                                "label": "User Decision",
-                                "tool_name": tc["tool_name"],
-                                "content": "pending",
+                                "label": (
+                                    "User Decision"
+                                ),
+                                "tool_name": tool_name,
+                                "content": "approved",
                             }
                         )
+
                         step += 1
 
+
+                        if tool_result is None:
+
+                            tool_result = (
+                                "No tool result returned."
+                            )
+
+
+                        # Actual Tool Result
                         agent_trace.append(
                             {
                                 "step": step,
                                 "type": "tool_output",
-                                "label": "Tool Result",
-                                "tool_name": tc["tool_name"],
-                                "content": "pending",
+                                "label": (
+                                    f"Tool Result — "
+                                    f"{tool_name}"
+                                ),
+                                "tool_name": tool_name,
+                                "content": str(
+                                    tool_result
+                                )[:500],
                             }
                         )
+
                         step += 1
 
+
+                        # Result Sent to LLM
+                        agent_trace.append(
+                            {
+                                "step": step,
+                                "type": "llm_feed",
+                                "label": (
+                                    "Result Sent to LLM"
+                                ),
+                                "tool_name": tool_name,
+                                "content": (
+                                    f"Tool output from "
+                                    f"'{tool_name}' "
+                                    "fed into Gemini:\n"
+                                    f"→ {str(tool_result)[:300]}"
+                                ),
+                            }
+                        )
+
+                        step += 1
+
+
+                    # ==================================================
+                    # NORMAL TOOL
+                    # ==================================================
+
                     else:
+
+                        # Tool Called
                         agent_trace.append(
                             {
                                 "step": step,
                                 "type": "tool_call",
                                 "label": (
                                     f"Tool Called — "
-                                    f"{tc['tool_name']}"
+                                    f"{tool_name}"
                                 ),
-                                "tool_name": tc["tool_name"],
+                                "tool_name": tool_name,
                                 "content": (
-                                    f"Tool : {tc['tool_name']}\n"
-                                    f"Args : {tc['args']}\n"
-                                    f"Input: {active_prompt[:100]}"
+                                    f"Tool : {tool_name}\n"
+                                    f"Args : {tool_args}\n"
+                                    f"Input: "
+                                    f"{active_prompt[:100]}"
                                 ),
                             }
                         )
+
                         step += 1
+
+
+                        # Tool Result
+                        if tool_result is None:
+
+                            tool_result = (
+                                "No tool result returned."
+                            )
+
 
                         agent_trace.append(
                             {
@@ -519,88 +973,153 @@ def chat():
                                 "type": "tool_output",
                                 "label": (
                                     f"Tool Result — "
-                                    f"{tc['tool_name']}"
+                                    f"{tool_name}"
                                 ),
-                                "tool_name": tc["tool_name"],
+                                "tool_name": tool_name,
                                 "content": str(
-                                    tc["result"]
-                                )[:300],
+                                    tool_result
+                                )[:500],
                             }
                         )
+
                         step += 1
 
+
+                        # LLM Feed
                         agent_trace.append(
                             {
                                 "step": step,
                                 "type": "llm_feed",
-                                "label": "Result Sent to LLM",
+                                "label": (
+                                    "Result Sent to LLM"
+                                ),
+                                "tool_name": tool_name,
                                 "content": (
                                     f"Tool output from "
-                                    f"'{tc['tool_name']}' "
+                                    f"'{tool_name}' "
                                     "fed into Gemini:\n"
-                                    f"→ {str(tc['result'])[:200]}"
+                                    f"→ {str(tool_result)[:300]}"
                                 ),
                             }
                         )
+
                         step += 1
+
+
+                # ==================================================
+                # FINAL RESPONSE
+                # ==================================================
 
                 agent_trace.append(
                     {
                         "step": step,
                         "type": "final_answer",
-                        "label": "Final LLM Response",
+                        "label": (
+                            "Final LLM Response"
+                        ),
                         "content": (
-                            output_guard_res.sanitized_output
+                            output_guard_res
+                            .sanitized_output
                         ),
                     }
                 )
+
+
+                # ==================================================
+                # RETURN MCP RESPONSE
+                # ==================================================
 
                 return jsonify(
                     {
                         "response": (
-                            output_guard_res.sanitized_output
+                            output_guard_res
+                            .sanitized_output
                         ),
-                        "sentiment": predicted_sentiment,
+
+                        "sentiment": (
+                            predicted_sentiment
+                        ),
+
                         "mcp_status": "active",
+
                         "tools_discovered": (
-                            agent_res["tools_discovered"]
+                            agent_res[
+                                "tools_discovered"
+                            ]
                         ),
+
                         "tools_invoked": (
-                            agent_res["tools_invoked"]
+                            agent_res[
+                                "tools_invoked"
+                            ]
                         ),
+
                         "agent_trace": agent_trace,
+
                         "guardrail_status": (
                             "passed"
-                            if not input_guard_res.pii_detected
+                            if not input_guard_res
+                            .pii_detected
                             else "pii_redacted"
                         ),
-                        "pii_types": input_guard_res.pii_types,
+
+                        "pii_types": (
+                            input_guard_res
+                            .pii_types
+                        ),
                     }
                 )
 
+
             except Exception as mcp_err:
+
                 import traceback
+
                 traceback.print_exc()
+
 
                 return jsonify(
                     {
-                        "response": f"MCP Error: {str(mcp_err)}",
-                        "sentiment": predicted_sentiment,
+                        "response": (
+                            f"MCP Error: "
+                            f"{str(mcp_err)}"
+                        ),
+                        "sentiment": (
+                            predicted_sentiment
+                        ),
                     }
                 ), 200
 
-        if use_rag and user_message:
+
+        # ==================================================
+        # RAG MODE
+        # ==================================================
+
+        if (
+            use_rag
+            and user_message
+        ):
+
             print(
                 "[+] Processing request via "
                 "Qdrant RAG Engine..."
             )
 
-            q_client, collection_name = get_qdrant_store(client)
 
-            query_embedding_response = client.models.embed_content(
-                model="gemini-embedding-2",
-                contents=active_prompt,
+            q_client, collection_name = (
+                get_qdrant_store(
+                    client
+                )
             )
+
+
+            query_embedding_response = (
+                client.models.embed_content(
+                    model="gemini-embedding-2",
+                    contents=active_prompt,
+                )
+            )
+
 
             query_vector = (
                 query_embedding_response
@@ -608,158 +1127,257 @@ def chat():
                 .values
             )
 
+
             filter_cat = data.get(
                 "filterCategory",
                 "",
             ).strip()
+
 
             filter_role = data.get(
                 "filterRole",
                 "",
             ).strip()
 
+
             filter_company = data.get(
                 "filterCompany",
                 "",
             ).strip()
+
 
             filter_rule = data.get(
                 "filterRule",
                 "must",
             ).strip().lower()
 
+
             filter_conditions = []
 
-            if filter_cat and filter_cat != "all":
+
+            if (
+                filter_cat
+                and filter_cat != "all"
+            ):
+
                 filter_conditions.append(
                     FieldCondition(
                         key="category",
-                        match=MatchValue(value=filter_cat),
+                        match=MatchValue(
+                            value=filter_cat
+                        ),
                     )
                 )
 
-            if filter_role and filter_role != "all":
+
+            if (
+                filter_role
+                and filter_role != "all"
+            ):
+
                 filter_conditions.append(
                     FieldCondition(
                         key="role",
-                        match=MatchValue(value=filter_role),
+                        match=MatchValue(
+                            value=filter_role
+                        ),
                     )
                 )
 
-            if filter_company and filter_company != "all":
+
+            if (
+                filter_company
+                and filter_company != "all"
+            ):
+
                 filter_conditions.append(
                     FieldCondition(
                         key="company",
-                        match=MatchValue(value=filter_company),
+                        match=MatchValue(
+                            value=filter_company
+                        ),
                     )
                 )
 
+
             query_filter = None
 
+
             if filter_conditions:
+
                 if filter_rule == "must_not":
+
                     query_filter = Filter(
-                        must_not=filter_conditions
+                        must_not=(
+                            filter_conditions
+                        )
                     )
+
                 else:
+
                     query_filter = Filter(
                         must=filter_conditions
                     )
 
-            response = q_client.query_points(
-                collection_name=collection_name,
-                query=query_vector,
-                query_filter=query_filter,
-                limit=6,
+
+            response = (
+                q_client.query_points(
+                    collection_name=(
+                        collection_name
+                    ),
+                    query=query_vector,
+                    query_filter=query_filter,
+                    limit=6,
+                )
             )
+
 
             retrieved_texts = [
                 result.payload["text"]
                 for result in response.points
             ]
 
+
+            # ==================================================
+            # RAG FALLBACK
+            # ==================================================
+
             if not retrieved_texts:
+
                 general_prompt = f"""
 You are a highly capable, friendly AI assistant.
-Answer the following question accurately and helpfully.
 
-Question: {active_prompt}
+Answer the following question accurately
+and helpfully.
+
+Question:
+{active_prompt}
 
 Answer:
 """
 
-                fallback_response = generate_with_retry(
-                    client=client,
-                    contents=general_prompt,
-                    config={"temperature": temp},
+
+                fallback_response = (
+                    generate_with_retry(
+                        client=client,
+                        contents=general_prompt,
+                        config={
+                            "temperature": temp
+                        },
+                    )
                 )
 
-                output_guard_res = guardrails.validate_output(
-                    fallback_response.text
+
+                output_guard_res = (
+                    guardrails.validate_output(
+                        fallback_response.text
+                    )
                 )
+
 
                 return jsonify(
                     {
                         "response": (
-                            output_guard_res.sanitized_output
+                            output_guard_res
+                            .sanitized_output
                         ),
-                        "sentiment": predicted_sentiment,
+                        "sentiment": (
+                            predicted_sentiment
+                        ),
                         "guardrail_status": (
                             "passed"
-                            if not input_guard_res.pii_detected
+                            if not input_guard_res
+                            .pii_detected
                             else "pii_redacted"
                         ),
-                        "pii_types": input_guard_res.pii_types,
+                        "pii_types": (
+                            input_guard_res
+                            .pii_types
+                        ),
                     }
                 )
 
-            context_str = "\n\n".join(retrieved_texts)
+
+            # ==================================================
+            # RAG CONTEXT
+            # ==================================================
+
+            context_str = "\n\n".join(
+                retrieved_texts
+            )
+
 
             augmented_prompt = f"""
 You are a highly capable, friendly AI assistant.
+
 Answer the user's question accurately.
 
-If the question is related to the provided Context
-(resume, candidate background, skills, experience),
-use the context.
+If the question is related to the provided
+Context (resume, candidate background, skills,
+experience), use the context.
 
 If the question is a general question
 (math, science, coding, etc.), answer it directly
-from your knowledge — do NOT say "not in context".
+from your knowledge.
 
-Context (from knowledge base):
+Do NOT say "not in context".
+
+Context:
 
 {context_str}
 
-User Question: {active_prompt}
+User Question:
+
+{active_prompt}
 
 Answer:
 """
 
-            generation_response = generate_with_retry(
-                client=client,
-                contents=augmented_prompt,
-                config={"temperature": temp},
+
+            generation_response = (
+                generate_with_retry(
+                    client=client,
+                    contents=augmented_prompt,
+                    config={
+                        "temperature": temp
+                    },
+                )
             )
 
-            output_guard_res = guardrails.validate_output(
-                generation_response.text
+
+            output_guard_res = (
+                guardrails.validate_output(
+                    generation_response.text
+                )
             )
+
 
             return jsonify(
                 {
                     "response": (
-                        output_guard_res.sanitized_output
+                        output_guard_res
+                        .sanitized_output
                     ),
-                    "sentiment": predicted_sentiment,
+                    "sentiment": (
+                        predicted_sentiment
+                    ),
                     "guardrail_status": (
                         "passed"
-                        if not input_guard_res.pii_detected
+                        if not input_guard_res
+                        .pii_detected
                         else "pii_redacted"
                     ),
-                    "pii_types": input_guard_res.pii_types,
+                    "pii_types": (
+                        input_guard_res
+                        .pii_types
+                    ),
                 }
             )
+
+
+        # ==================================================
+        # NORMAL CHAT
+        # ==================================================
 
         SYSTEM_PROMPT = """
 You are a highly capable, friendly, and knowledgeable
@@ -787,20 +1405,33 @@ or background, answer helpfully.
 You are a GENERAL PURPOSE assistant first.
 
 Be concise, clear and helpful.
+
 Match the user's language tone.
 """
 
-        history = data.get("history", [])
+
+        history = data.get(
+            "history",
+            []
+        )
+
 
         api_history = []
 
+
         for msg in history:
+
             if (
-                not isinstance(msg, dict)
+                not isinstance(
+                    msg,
+                    dict
+                )
                 or "role" not in msg
                 or "text" not in msg
             ):
+
                 continue
+
 
             api_history.append(
                 {
@@ -817,33 +1448,68 @@ Match the user's language tone.
                 }
             )
 
-        if image_b64:
-            image_bytes = base64.b64decode(image_b64)
 
-            image_part = types.Part.from_bytes(
-                data=image_bytes,
-                mime_type=image_type,
+        # ==================================================
+        # IMAGE INPUT
+        # ==================================================
+
+        if image_b64:
+
+            image_bytes = (
+                base64.b64decode(
+                    image_b64
+                )
             )
+
+
+            image_part = (
+                types.Part.from_bytes(
+                    data=image_bytes,
+                    mime_type=image_type,
+                )
+            )
+
 
             user_input = (
-                [image_part, active_prompt]
+                [
+                    image_part,
+                    active_prompt
+                ]
                 if active_prompt
-                else [image_part]
+                else [
+                    image_part
+                ]
             )
+
         else:
+
             user_input = active_prompt
 
+
+        # ==================================================
+        # NORMAL GEMINI CHAT
+        # ==================================================
+
         try:
-            if api_history and len(api_history) > 1:
+
+            if (
+                api_history
+                and len(api_history) > 1
+            ):
+
                 full_history = [
+
                     {
                         "role": "user",
                         "parts": [
                             {
-                                "text": SYSTEM_PROMPT
+                                "text": (
+                                    SYSTEM_PROMPT
+                                )
                             }
                         ],
                     },
+
                     {
                         "role": "model",
                         "parts": [
@@ -857,46 +1523,75 @@ Match the user's language tone.
                             }
                         ],
                     },
+
                 ] + api_history[:-1]
 
-                chat_session = client.chats.create(
-                    model="gemini-3.5-flash-lite",
-                    history=full_history,
+
+                chat_session = (
+                    client.chats.create(
+                        model=(
+                            "gemini-3.5-flash-lite"
+                        ),
+                        history=full_history,
+                    )
                 )
 
-                response = chat_session.send_message(
-                    user_input,
-                    config={"temperature": temp},
+
+                response = (
+                    chat_session.send_message(
+                        user_input,
+                        config={
+                            "temperature": temp
+                        },
+                    )
                 )
+
 
             else:
+
                 if image_b64:
+
                     full_prompt_input = [
+
                         image_part,
+
                         (
                             f"{SYSTEM_PROMPT}\n\n"
                             f"User: {active_prompt}\n"
                             "Assistant:"
                         ),
+
                     ]
+
                 else:
+
                     full_prompt_input = (
                         f"{SYSTEM_PROMPT}\n\n"
                         f"User: {active_prompt}\n"
                         "Assistant:"
                     )
 
-                response = generate_with_retry(
-                    client=client,
-                    contents=full_prompt_input,
-                    config={"temperature": temp},
+
+                response = (
+                    generate_with_retry(
+                        client=client,
+                        contents=(
+                            full_prompt_input
+                        ),
+                        config={
+                            "temperature": temp
+                        },
+                    )
                 )
 
+
         except Exception as chat_err:
+
             print(
                 "[-] Standard chat execution "
                 f"exception: {chat_err}"
             )
+
 
             response = type(
                 "DummyResponse",
@@ -911,38 +1606,67 @@ Match the user's language tone.
                 },
             )()
 
-        output_guard_res = guardrails.validate_output(
-            response.text
+
+        # ==================================================
+        # OUTPUT GUARDRAIL
+        # ==================================================
+
+        output_guard_res = (
+            guardrails.validate_output(
+                response.text
+            )
         )
+
 
         return jsonify(
             {
                 "response": (
-                    output_guard_res.sanitized_output
+                    output_guard_res
+                    .sanitized_output
                 ),
-                "sentiment": predicted_sentiment,
+
+                "sentiment": (
+                    predicted_sentiment
+                ),
+
                 "guardrail_status": (
                     "passed"
-                    if not input_guard_res.pii_detected
+                    if not input_guard_res
+                    .pii_detected
                     else "pii_redacted"
                 ),
-                "pii_types": input_guard_res.pii_types,
+
+                "pii_types": (
+                    input_guard_res
+                    .pii_types
+                ),
             }
         )
 
+
     except Exception as e:
+
         import traceback
+
         traceback.print_exc()
+
 
         return jsonify(
             {
-                "response": f"Server Response: {str(e)}",
+                "response": (
+                    f"Server Response: {str(e)}"
+                ),
                 "sentiment": "neutral",
             }
         ), 200
 
 
+# ==========================================================
+# LOCAL SERVER
+# ==========================================================
+
 if __name__ == "__main__":
+
     app.run(
         debug=False,
         port=5000,
