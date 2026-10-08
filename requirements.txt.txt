@@ -1,0 +1,6 @@
+Flask
+google-genai
+qdrant-client
+joblib
+scikit-learn
+gunicorn
