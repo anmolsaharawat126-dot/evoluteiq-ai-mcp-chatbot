@@ -29,12 +29,16 @@ from mcp_server import (
 
 def get_gemini_key():
 
-    key = os.environ.get("GEMINI_API_KEY", "")
+    key = os.environ.get(
+        "GEMINI_API_KEY",
+        ""
+    )
 
     if key:
         return key
 
     try:
+
         if os.path.exists("app.py"):
 
             with open(
@@ -65,7 +69,9 @@ def get_gemini_key():
 
     except Exception as e:
 
-        print(f"[-] Warning: {e}")
+        print(
+            f"[-] Warning: {e}"
+        )
 
     return ""
 
@@ -95,10 +101,24 @@ def run_mcp_query(user_query: str) -> dict:
     tool_calls_detail = []
 
     math_matched = False
+    tool_matched = False
 
 
     # ======================================================
-    # MATH
+    # NUMBERS
+    # ======================================================
+
+    numbers = [
+        float(n)
+        for n in re.findall(
+            r"\d+(?:\.\d+)?",
+            user_query
+        )
+    ]
+
+
+    # ======================================================
+    # 1. MATH
     # ======================================================
 
     MATH_STEMS = [
@@ -116,14 +136,6 @@ def run_mcp_query(user_query: str) -> dict:
         "power"
     ]
 
-    numbers = [
-        float(n)
-        for n in re.findall(
-            r"\d+(?:\.\d+)?",
-            user_query
-        )
-    ]
-
     is_math = (
         any(
             stem in query_lower
@@ -132,14 +144,17 @@ def run_mcp_query(user_query: str) -> dict:
         or "+" in user_query
         or "*" in user_query
         or "^" in user_query
+        or "/" in user_query
     ) and len(numbers) >= 2
 
 
     if is_math:
 
         math_matched = True
+        tool_matched = True
 
         op = "add"
+
 
         if (
             any(
@@ -155,6 +170,7 @@ def run_mcp_query(user_query: str) -> dict:
 
             op = "multiply"
 
+
         elif (
             "subtract" in query_lower
             or "minus" in query_lower
@@ -162,12 +178,14 @@ def run_mcp_query(user_query: str) -> dict:
 
             op = "subtract"
 
+
         elif (
             "divid" in query_lower
             or "/" in user_query
         ):
 
             op = "divide"
+
 
         elif (
             "power" in query_lower
@@ -183,10 +201,12 @@ def run_mcp_query(user_query: str) -> dict:
             f"b={numbers[1]}"
         )
 
+
         print(
             "[+] MCP Agent: Calling FastMCP Tool "
             f"'calculate_math({args_str})'..."
         )
+
 
         result = calculate_math(
             op,
@@ -194,54 +214,76 @@ def run_mcp_query(user_query: str) -> dict:
             numbers[1]
         )
 
+
         tool_outputs.append(result)
 
-        tool_calls_detail.append({
-            "tool_name": "calculate_math",
-            "args": args_str,
-            "result": result,
-            "approval_required": False
-        })
+
+        tool_calls_detail.append(
+            {
+                "tool_name": "calculate_math",
+                "args": args_str,
+                "result": result,
+                "approval_required": False
+            }
+        )
 
 
     # ======================================================
-    # PRIME CHECK
+    # 2. PRIME CHECK
     # ======================================================
 
-    if "prime" in query_lower and numbers:
+    elif (
+        "prime" in query_lower
+        and numbers
+    ):
 
-        number = int(numbers[0])
+        tool_matched = True
 
-        args_str = f"number={number}"
+        number = int(
+            numbers[0]
+        )
+
+        args_str = (
+            f"number={number}"
+        )
+
 
         print(
             "[+] MCP Agent: Calling FastMCP Tool "
             f"'check_prime({number})'..."
         )
 
-        result = check_prime(number)
+
+        result = check_prime(
+            number
+        )
+
 
         tool_outputs.append(result)
 
-        tool_calls_detail.append({
-            "tool_name": "check_prime",
-            "args": args_str,
-            "result": result,
-            "approval_required": False
-        })
+
+        tool_calls_detail.append(
+            {
+                "tool_name": "check_prime",
+                "args": args_str,
+                "result": result,
+                "approval_required": False
+            }
+        )
 
 
     # ======================================================
-    # WEATHER
+    # 3. WEATHER
     # ======================================================
 
-    if (
+    elif (
         "weather" in query_lower
         or "temperature" in query_lower
         or "climate" in query_lower
     ):
 
-        # Known supported cities
+        tool_matched = True
+
         known_cities = [
             "mumbai",
             "delhi",
@@ -250,9 +292,10 @@ def run_mcp_query(user_query: str) -> dict:
             "noida"
         ]
 
+
         city = "Delhi"
 
-        # Find the actual city mentioned in the query
+
         for known_city in known_cities:
 
             if known_city in query_lower:
@@ -261,166 +304,138 @@ def run_mcp_query(user_query: str) -> dict:
                 break
 
 
-        args_str = f"city='{city}'"
+        args_str = (
+            f"city='{city}'"
+        )
+
 
         print(
             "[+] MCP Agent: Calling FastMCP Tool "
             f"'check_weather({args_str})'..."
         )
 
-        result = check_weather(city)
+
+        result = check_weather(
+            city
+        )
+
 
         tool_outputs.append(result)
 
-        tool_calls_detail.append({
-            "tool_name": "check_weather",
-            "args": args_str,
-            "result": result,
-            "approval_required": True
-        })
+
+        tool_calls_detail.append(
+            {
+                "tool_name": "check_weather",
+                "args": args_str,
+                "result": result,
+                "approval_required": True
+            }
+        )
 
 
     # ======================================================
-    # WEB TOPIC SEARCH
+    # 4. CANDIDATE SKILLS
     # ======================================================
 
-    is_web_query = (
-        not math_matched
-        and
-        not (
-            "weather" in query_lower
-            or "temperature" in query_lower
-            or "climate" in query_lower
-        )
-        and
-        (
-            "web" in query_lower
-            or "search topic" in query_lower
-            or "explain" in query_lower
-            or (
-                "what is" in query_lower
-                and not numbers
-            )
-        )
-    )
-
-
-    if is_web_query:
-
-        topic_match = re.search(
-            r"(?:about|topic|is|explain)\s+"
-            r"([A-Za-z\s]+)",
-            user_query,
-            re.IGNORECASE
-        )
-
-        target_topic = (
-            topic_match.group(1).strip()
-            if topic_match
-            else user_query
-        )
-
-        args_str = f"topic='{target_topic}'"
-
-        print(
-            "[+] MCP Agent: Calling FastMCP Tool "
-            f"'search_web_topic({args_str})'..."
-        )
-
-        result = search_web_topic(
-            target_topic
-        )
-
-        tool_outputs.append(result)
-
-        tool_calls_detail.append({
-            "tool_name": "search_web_topic",
-            "args": args_str,
-            "result": result,
-            "approval_required": False
-        })
-
-
-    # ======================================================
-    # GREETING
-    # ======================================================
-
-    if (
-        "greet" in query_lower
-        or "hi" in query_lower
-        or "hello" in query_lower
-    ):
-
-        name_match = re.search(
-            r"(?:name\s+is|i\s+am|greet)\s+"
-            r"([A-Za-z]+)",
-            user_query,
-            re.IGNORECASE
-        )
-
-        user_name = (
-            name_match.group(1)
-            if name_match
-            else "User"
-        )
-
-        args_str = f"name='{user_name}'"
-
-        print(
-            "[+] MCP Agent: Calling FastMCP Tool "
-            f"'greet_user({args_str})'..."
-        )
-
-        result = greet_user(user_name)
-
-        tool_outputs.append(result)
-
-        tool_calls_detail.append({
-            "tool_name": "greet_user",
-            "args": args_str,
-            "result": result,
-            "approval_required": False
-        })
-
-
-    # ======================================================
-    # CANDIDATE SKILLS
-    # ======================================================
-
-    if (
+    elif (
         "skill" in query_lower
+        or "skills" in query_lower
+        or "technical skills" in query_lower
         or "framework" in query_lower
         or "database" in query_lower
     ):
 
-        args_str = "category='all'"
+        tool_matched = True
+
+        args_str = (
+            "category='all'"
+        )
+
 
         print(
             "[+] MCP Agent: Calling FastMCP Tool "
             "'get_candidate_skills'..."
         )
 
-        result = get_candidate_skills("all")
+
+        result = get_candidate_skills(
+            "all"
+        )
+
 
         tool_outputs.append(result)
 
-        tool_calls_detail.append({
-            "tool_name": "get_candidate_skills",
-            "args": args_str,
-            "result": result,
-            "approval_required": False
-        })
+
+        tool_calls_detail.append(
+            {
+                "tool_name": "get_candidate_skills",
+                "args": args_str,
+                "result": result,
+                "approval_required": False
+            }
+        )
 
 
     # ======================================================
-    # EXPERIENCE
+    # 5. CANDIDATE FIT
     # ======================================================
 
-    if (
-        "experience" in query_lower
-        or "duration" in query_lower
-        or "how long" in query_lower
+    elif (
+        "candidate fit" in query_lower
+        or "fit for" in query_lower
+        or "evaluate candidate" in query_lower
+        or "match candidate" in query_lower
+        or "job fit" in query_lower
     ):
+
+        tool_matched = True
+
+        args_str = (
+            "role='AI/ML Developer', "
+            "skills='python, flask, qdrant, rag, mcp'"
+        )
+
+
+        print(
+            "[+] MCP Agent: Calling FastMCP Tool "
+            "'evaluate_candidate_fit'..."
+        )
+
+
+        result = evaluate_candidate_fit(
+            "AI/ML Developer",
+            "python, flask, qdrant, rag, mcp"
+        )
+
+
+        tool_outputs.append(result)
+
+
+        tool_calls_detail.append(
+            {
+                "tool_name": (
+                    "evaluate_candidate_fit"
+                ),
+                "args": args_str,
+                "result": result,
+                "approval_required": False
+            }
+        )
+
+
+    # ======================================================
+    # 6. EXPERIENCE
+    # ======================================================
+
+    elif (
+        "experience duration" in query_lower
+        or "calculate experience" in query_lower
+        or "how many years of experience"
+        in query_lower
+        or "how long has" in query_lower
+    ):
+
+        tool_matched = True
 
         start_year = (
             int(numbers[0])
@@ -429,6 +444,7 @@ def run_mcp_query(user_query: str) -> dict:
             else 2024
         )
 
+
         end_year = (
             int(numbers[1])
             if len(numbers) >= 2
@@ -436,81 +452,60 @@ def run_mcp_query(user_query: str) -> dict:
             else 2026
         )
 
+
         args_str = (
             f"start={start_year}, "
             f"end={end_year}"
         )
+
 
         print(
             "[+] MCP Agent: Calling FastMCP Tool "
             f"'calculate_experience({args_str})'..."
         )
 
+
         result = calculate_experience(
             start_year,
             end_year
         )
 
-        tool_outputs.append(result)
-
-        tool_calls_detail.append({
-            "tool_name": "calculate_experience",
-            "args": args_str,
-            "result": result,
-            "approval_required": False
-        })
-
-
-    # ======================================================
-    # CANDIDATE FIT
-    # ======================================================
-
-    if (
-        "fit" in query_lower
-        or "evaluate" in query_lower
-        or "match" in query_lower
-    ):
-
-        args_str = (
-            "role='AI/ML Developer', "
-            "skills='python, flask, qdrant, rag, mcp'"
-        )
-
-        print(
-            "[+] MCP Agent: Calling FastMCP Tool "
-            "'evaluate_candidate_fit'..."
-        )
-
-        result = evaluate_candidate_fit(
-            "AI/ML Developer",
-            "python, flask, qdrant, rag, mcp"
-        )
 
         tool_outputs.append(result)
 
-        tool_calls_detail.append({
-            "tool_name": "evaluate_candidate_fit",
-            "args": args_str,
-            "result": result,
-            "approval_required": False
-        })
+
+        tool_calls_detail.append(
+            {
+                "tool_name": (
+                    "calculate_experience"
+                ),
+                "args": args_str,
+                "result": result,
+                "approval_required": False
+            }
+        )
 
 
     # ======================================================
-    # DELETE FILE — APPROVAL ONLY
+    # 7. DELETE FILE — APPROVAL REQUIRED
     # ======================================================
 
-    if (
-        "delete" in query_lower
+    elif (
+        "delete file" in query_lower
         or "remove file" in query_lower
-        or "erase" in query_lower
+        or "erase file" in query_lower
     ):
+
+        tool_matched = True
 
         filename_match = re.search(
-            r"(?:delete|remove|erase)\s+([\w.\-]+)",
+            r"(?:delete|remove|erase)"
+            r"\s+(?:file\s+)?"
+            r"([\w.\-]+)",
             user_query,
             re.IGNORECASE
         )
+
 
         filename = (
             filename_match.group(1)
@@ -518,7 +513,11 @@ def run_mcp_query(user_query: str) -> dict:
             else "unknown_file"
         )
 
-        args_str = f"filename='{filename}'"
+
+        args_str = (
+            f"filename='{filename}'"
+        )
+
 
         print(
             "[+] MCP Agent: Gated tool "
@@ -526,49 +525,241 @@ def run_mcp_query(user_query: str) -> dict:
             "— approval required in UI"
         )
 
-        tool_calls_detail.append({
-            "tool_name": "delete_file",
-            "args": args_str,
-            "result": None,
-            "approval_required": True
-        })
+
+        tool_calls_detail.append(
+            {
+                "tool_name": "delete_file",
+                "args": args_str,
+                "result": None,
+                "approval_required": True
+            }
+        )
 
 
     # ======================================================
-    # RESUME SEARCH / RAG FALLBACK
+    # 8. GREETING
     # ======================================================
 
-    if (
-        not tool_outputs
-        or "resume" in query_lower
-        or "project" in query_lower
-        or "internship" in query_lower
-        or "anmol" in query_lower
+    elif (
+        query_lower.strip() in [
+            "hi",
+            "hello",
+            "hey",
+            "hi there",
+            "hello there"
+        ]
+        or query_lower.startswith(
+            "greet "
+        )
+        or "greet me" in query_lower
     ):
+
+        tool_matched = True
+
+        name_match = re.search(
+            r"(?:name\s+is|i\s+am|greet)\s+"
+            r"([A-Za-z]+)",
+            user_query,
+            re.IGNORECASE
+        )
+
+
+        user_name = (
+            name_match.group(1)
+            if name_match
+            else "User"
+        )
+
+
+        args_str = (
+            f"name='{user_name}'"
+        )
+
+
+        print(
+            "[+] MCP Agent: Calling FastMCP Tool "
+            f"'greet_user({args_str})'..."
+        )
+
+
+        result = greet_user(
+            user_name
+        )
+
+
+        tool_outputs.append(result)
+
+
+        tool_calls_detail.append(
+            {
+                "tool_name": "greet_user",
+                "args": args_str,
+                "result": result,
+                "approval_required": False
+            }
+        )
+
+
+    # ======================================================
+    # 9. RESUME / INTERNSHIP / PROJECT / ANMOL
+    # ======================================================
+
+    elif (
+        "resume" in query_lower
+        or "internship" in query_lower
+        or "intern" in query_lower
+        or "project" in query_lower
+        or "anmol" in query_lower
+        or "education" in query_lower
+        or "college" in query_lower
+        or "degree" in query_lower
+        or "cgpa" in query_lower
+        or "experience" in query_lower
+    ):
+
+        tool_matched = True
 
         args_str = (
             f"query='{user_query[:60]}...', "
             "category='all'"
         )
 
+
         print(
             "[+] MCP Agent: Calling FastMCP Tool "
             "'search_resume'..."
         )
+
 
         result = search_resume(
             user_query,
             "all"
         )
 
+
         tool_outputs.append(result)
 
-        tool_calls_detail.append({
-            "tool_name": "search_resume",
-            "args": args_str,
-            "result": result,
-            "approval_required": False
-        })
+
+        tool_calls_detail.append(
+            {
+                "tool_name": "search_resume",
+                "args": args_str,
+                "result": result,
+                "approval_required": False
+            }
+        )
+
+
+    # ======================================================
+    # 10. WEB TOPIC SEARCH
+    # ======================================================
+
+    elif (
+        "web search" in query_lower
+        or "search web" in query_lower
+        or "search topic" in query_lower
+        or query_lower.startswith(
+            "explain "
+        )
+        or (
+            "what is" in query_lower
+            and not numbers
+            and not any(
+                word in query_lower
+                for word in [
+                    "anmol",
+                    "resume",
+                    "internship",
+                    "skills",
+                    "project"
+                ]
+            )
+        )
+    ):
+
+        tool_matched = True
+
+        topic_match = re.search(
+            r"(?:about|topic|is|explain)\s+"
+            r"([A-Za-z\s]+)",
+            user_query,
+            re.IGNORECASE
+        )
+
+
+        target_topic = (
+            topic_match.group(1).strip()
+            if topic_match
+            else user_query
+        )
+
+
+        args_str = (
+            f"topic='{target_topic}'"
+        )
+
+
+        print(
+            "[+] MCP Agent: Calling FastMCP Tool "
+            f"'search_web_topic({args_str})'..."
+        )
+
+
+        result = search_web_topic(
+            target_topic
+        )
+
+
+        tool_outputs.append(result)
+
+
+        tool_calls_detail.append(
+            {
+                "tool_name": (
+                    "search_web_topic"
+                ),
+                "args": args_str,
+                "result": result,
+                "approval_required": False
+            }
+        )
+
+
+    # ======================================================
+    # 11. DEFAULT RESUME FALLBACK
+    # ======================================================
+
+    if not tool_matched:
+
+        print(
+            "[+] MCP Agent: No specific tool matched. "
+            "Using resume search as fallback..."
+        )
+
+
+        args_str = (
+            f"query='{user_query[:60]}...', "
+            "category='all'"
+        )
+
+
+        result = search_resume(
+            user_query,
+            "all"
+        )
+
+
+        tool_outputs.append(result)
+
+
+        tool_calls_detail.append(
+            {
+                "tool_name": "search_resume",
+                "args": args_str,
+                "result": result,
+                "approval_required": False
+            }
+        )
 
 
     # ======================================================
@@ -577,14 +768,31 @@ def run_mcp_query(user_query: str) -> dict:
 
     key = get_gemini_key()
 
+
     if not key:
 
         return {
-            "response": "Gemini API key is not configured.",
-            "tools_discovered": tools_discovered,
-            "tools_invoked": len(tool_outputs),
-            "mcp_context": "\n\n".join(tool_outputs),
-            "tool_calls_detail": tool_calls_detail
+            "response": (
+                "Gemini API key is not configured."
+            ),
+
+            "tools_discovered": (
+                tools_discovered
+            ),
+
+            "tools_invoked": (
+                len(tool_outputs)
+            ),
+
+            "mcp_context": (
+                "\n\n".join(
+                    tool_outputs
+                )
+            ),
+
+            "tool_calls_detail": (
+                tool_calls_detail
+            )
         }
 
 
@@ -593,8 +801,10 @@ def run_mcp_query(user_query: str) -> dict:
     )
 
 
-    combined_context = "\n\n".join(
-        tool_outputs
+    combined_context = (
+        "\n\n".join(
+            tool_outputs
+        )
     )
 
 
@@ -636,18 +846,22 @@ Grounded Answer:
 
         try:
 
-            response = client.models.generate_content(
-                model=model_name,
-                contents=augmented_prompt
+            response = (
+                client.models.generate_content(
+                    model=model_name,
+                    contents=augmented_prompt
+                )
             )
 
             break
 
+
         except Exception as error:
 
             print(
-                f"[-] Gemini model '{model_name}' "
-                f"unavailable. Trying fallback model..."
+                f"[-] Gemini model "
+                f"'{model_name}' unavailable. "
+                "Trying fallback model..."
             )
 
             continue
@@ -665,10 +879,22 @@ Grounded Answer:
                 "\n\n"
                 f"{combined_context}"
             ),
-            "tools_discovered": tools_discovered,
-            "tools_invoked": len(tool_outputs),
-            "mcp_context": combined_context,
-            "tool_calls_detail": tool_calls_detail
+
+            "tools_discovered": (
+                tools_discovered
+            ),
+
+            "tools_invoked": (
+                len(tool_outputs)
+            ),
+
+            "mcp_context": (
+                combined_context
+            ),
+
+            "tool_calls_detail": (
+                tool_calls_detail
+            )
         }
 
 
@@ -678,10 +904,22 @@ Grounded Answer:
 
     return {
         "response": response.text,
-        "tools_discovered": tools_discovered,
-        "tools_invoked": len(tool_outputs),
-        "mcp_context": combined_context,
-        "tool_calls_detail": tool_calls_detail
+
+        "tools_discovered": (
+            tools_discovered
+        ),
+
+        "tools_invoked": (
+            len(tool_outputs)
+        ),
+
+        "mcp_context": (
+            combined_context
+        ),
+
+        "tool_calls_detail": (
+            tool_calls_detail
+        )
     }
 
 
@@ -695,9 +933,11 @@ if __name__ == "__main__":
         "What is the weather in Mumbai?"
     )
 
+
     print(
         "=== UNIVERSAL MCP AGENT RESPONSE ==="
     )
+
 
     print(
         result["response"]
