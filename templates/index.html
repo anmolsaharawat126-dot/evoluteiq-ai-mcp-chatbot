@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
     <style>
         :root {
             --bg-color: #212121;
@@ -35,7 +36,6 @@
             overflow: hidden;
         }
 
-        /* Minimal Sidebar */
         .sidebar {
             width: 260px;
             background: var(--sidebar-color);
@@ -138,7 +138,6 @@
             border-color: #555;
         }
 
-        /* Filter toggle collapse */
         .filter-summary {
             cursor: pointer;
             font-size: 12px;
@@ -153,7 +152,6 @@
             color: var(--text-main);
         }
 
-        /* Main Workspace */
         .chat-main {
             flex: 1;
             display: flex;
@@ -162,7 +160,6 @@
             position: relative;
         }
 
-        /* Top Bar */
         .top-bar {
             height: 52px;
             padding: 0 20px;
@@ -187,7 +184,6 @@
             background: var(--accent);
         }
 
-        /* Messages Container */
         .messages-area {
             flex: 1;
             overflow-y: auto;
@@ -200,7 +196,6 @@
             margin: 0 auto;
         }
 
-        /* Greeting state */
         .empty-greeting {
             display: flex;
             flex-direction: column;
@@ -242,7 +237,6 @@
             background: #3e3e3e;
         }
 
-        /* Chat Row */
         .message-row {
             display: flex;
             gap: 16px;
@@ -298,7 +292,6 @@
             display: block;
         }
 
-        /* Minimal Agent Trace */
         .trace-card {
             background: #171717;
             border: 1px solid #2f2f2f;
@@ -374,7 +367,6 @@
             font-weight: 500;
         }
 
-        /* Composer bar (ChatGPT style) */
         .composer-container {
             max-width: 800px;
             width: 100%;
@@ -460,9 +452,9 @@
         }
     </style>
 </head>
+
 <body>
 
-    <!-- Left Controls Panel -->
     <aside class="sidebar">
         <div class="sidebar-header">
             <button class="new-chat-btn" onclick="clearChat()">
@@ -473,7 +465,9 @@
         <div class="sidebar-body">
             <div>
                 <div class="settings-label">Settings</div>
+
                 <div class="option-box">
+
                     <div class="toggle-item">
                         <label>
                             <input type="checkbox" id="mcp-toggle" checked>
@@ -489,24 +483,55 @@
                     </div>
 
                     <div style="margin-top: 4px;">
-                        <span style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">API Key</span>
-                        <input type="password" id="api-key" class="text-input-clean" value="anmol123" placeholder="API Key">
+                        <span style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">
+                            API Key
+                        </span>
+
+                        <input
+                            type="password"
+                            id="api-key"
+                            class="text-input-clean"
+                            value="anmol123"
+                            placeholder="API Key"
+                        >
                     </div>
 
                     <div>
-                        <span style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Temperature: <span id="temp-val">0.7</span></span>
-                        <input type="range" id="temp-slider" min="0" max="1.5" step="0.1" value="0.7" style="width: 100%; accent-color: var(--accent);" oninput="document.getElementById('temp-val').textContent = this.value">
+                        <span style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">
+                            Temperature:
+                            <span id="temp-val">0.7</span>
+                        </span>
+
+                        <input
+                            type="range"
+                            id="temp-slider"
+                            min="0"
+                            max="1.5"
+                            step="0.1"
+                            value="0.7"
+                            style="width: 100%; accent-color: var(--accent);"
+                            oninput="document.getElementById('temp-val').textContent = this.value"
+                        >
                     </div>
+
                 </div>
             </div>
 
-            <!-- Optional RAG Filter dropdown (hidden by default) -->
             <details style="font-size: 12px; color: var(--text-muted);">
                 <summary class="filter-summary">Advanced Filters</summary>
+
                 <div class="option-box" style="margin-top: 8px;">
+
                     <div>
-                        <span style="font-size: 11px; color: var(--text-muted);">Category</span>
-                        <select id="filter-category" class="text-input-clean" style="margin-top: 4px;">
+                        <span style="font-size: 11px; color: var(--text-muted);">
+                            Category
+                        </span>
+
+                        <select
+                            id="filter-category"
+                            class="text-input-clean"
+                            style="margin-top: 4px;"
+                        >
                             <option value="all">All Categories</option>
                             <option value="work_experience">Work Experience</option>
                             <option value="skills">Technical Skills</option>
@@ -517,15 +542,17 @@
 
                     <input type="hidden" id="filter-role" value="all">
                     <input type="hidden" id="filter-rule" value="must">
+
                 </div>
             </details>
         </div>
     </aside>
 
-    <!-- Main Chat Workspace -->
     <main class="chat-main">
+
         <header class="top-bar">
             <span>Gemini Chat</span>
+
             <div class="top-status">
                 <div class="status-dot"></div>
                 <span>Ready</span>
@@ -533,34 +560,92 @@
         </header>
 
         <div class="messages-area" id="chat-box">
+
             <div class="empty-greeting" id="empty-greeting">
+
                 <h2>What's on your mind?</h2>
+
                 <div class="quick-chips">
-                    <div class="chip" onclick="quickAsk('What is 15 multiplied by 20?')">Calculate 15 × 20</div>
-                    <div class="chip" onclick="quickAsk('Delete report.pdf')">Test tool approval</div>
-                    <div class="chip" onclick="quickAsk('What are your technical skills?')">Skills inquiry</div>
+
+                    <div
+                        class="chip"
+                        onclick="quickAsk('What is 15 multiplied by 20?')"
+                    >
+                        Calculate 15 × 20
+                    </div>
+
+                    <div
+                        class="chip"
+                        onclick="quickAsk('Delete report.pdf')"
+                    >
+                        Test tool approval
+                    </div>
+
+                    <div
+                        class="chip"
+                        onclick="quickAsk('What are your technical skills?')"
+                    >
+                        Skills inquiry
+                    </div>
+
                 </div>
             </div>
+
         </div>
 
         <div class="composer-container">
+
             <div class="preview-tag" id="preview-badge">
                 <span id="preview-filename">image.png</span>
-                <span style="cursor: pointer; margin-left: 6px; color: #f87171;" onclick="removeImage()">✕</span>
+
+                <span
+                    style="cursor: pointer; margin-left: 6px; color: #f87171;"
+                    onclick="removeImage()"
+                >
+                    ✕
+                </span>
             </div>
 
             <div class="composer-box">
-                <label for="image-input" class="attach-btn" title="Upload image">📎</label>
-                <input type="file" id="image-input" accept="image/*" style="display: none;">
 
-                <input type="text" id="user-input" class="composer-input" placeholder="Message..." autocomplete="off">
+                <label
+                    for="image-input"
+                    class="attach-btn"
+                    title="Upload image"
+                >
+                    📎
+                </label>
 
-                <button class="send-icon-btn" id="send-btn" title="Send message">↑</button>
+                <input
+                    type="file"
+                    id="image-input"
+                    accept="image/*"
+                    style="display: none;"
+                >
+
+                <input
+                    type="text"
+                    id="user-input"
+                    class="composer-input"
+                    placeholder="Message..."
+                    autocomplete="off"
+                >
+
+                <button
+                    class="send-icon-btn"
+                    id="send-btn"
+                    title="Send message"
+                >
+                    ↑
+                </button>
+
             </div>
         </div>
+
     </main>
 
     <script>
+
         const chatBox = document.getElementById('chat-box');
         const userInput = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
@@ -572,8 +657,10 @@
 
         let chatHistory = [];
 
-        imageInput.onchange = function() {
+        imageInput.onchange = function () {
+
             const file = imageInput.files[0];
+
             if (file) {
                 previewFilename.textContent = file.name;
                 previewBadge.style.display = 'block';
@@ -581,237 +668,533 @@
         };
 
         function removeImage() {
+
             imageInput.value = '';
             previewBadge.style.display = 'none';
+
         }
 
         function quickAsk(text) {
+
             userInput.value = text;
             sendMessage();
+
         }
 
         function clearChat() {
+
             chatBox.innerHTML = '';
             chatHistory = [];
+
             if (emptyGreeting) {
                 chatBox.appendChild(emptyGreeting);
                 emptyGreeting.style.display = 'flex';
             }
+
         }
 
         function addMessage(sender, text, imgUrl) {
-            if (emptyGreeting) emptyGreeting.style.display = 'none';
+
+            if (emptyGreeting) {
+                emptyGreeting.style.display = 'none';
+            }
 
             const row = document.createElement('div');
+
             row.className = `message-row ${sender}`;
 
             const avatar = document.createElement('div');
-            avatar.className = `msg-avatar ${sender === 'user' ? 'user' : 'ai'}`;
-            avatar.textContent = sender === 'user' ? 'U' : '✦';
+
+            avatar.className =
+                `msg-avatar ${sender === 'user' ? 'user' : 'ai'}`;
+
+            avatar.textContent =
+                sender === 'user' ? 'U' : '✦';
 
             const body = document.createElement('div');
+
             body.className = 'msg-body';
 
             if (imgUrl) {
+
                 const img = document.createElement('img');
+
                 img.src = imgUrl;
+
                 body.appendChild(img);
             }
 
             const textNode = document.createElement('div');
+
             textNode.textContent = text;
+
             body.appendChild(textNode);
 
             if (sender === 'user') {
+
                 row.appendChild(body);
+
             } else {
+
                 row.appendChild(avatar);
                 row.appendChild(body);
+
             }
 
             chatBox.appendChild(row);
+
             chatBox.scrollTop = chatBox.scrollHeight;
+
             return body;
         }
 
         function renderTrace(traceSteps, parentEl) {
-            if (!traceSteps || traceSteps.length === 0) return;
+
+            if (!traceSteps || traceSteps.length === 0) {
+                return;
+            }
 
             const card = document.createElement('div');
+
             card.className = 'trace-card';
 
             const toggle = document.createElement('div');
+
             toggle.className = 'trace-toggle';
-            toggle.innerHTML = `<span>Tool execution log (${traceSteps.length} steps)</span> <span>▾</span>`;
+
+            toggle.innerHTML =
+                `<span>Tool execution log (${traceSteps.length} steps)</span>
+                 <span>▾</span>`;
 
             const content = document.createElement('div');
+
             content.className = 'trace-content';
 
-            toggle.onclick = function() {
-                const isHidden = content.style.display === 'none';
-                content.style.display = isHidden ? 'flex' : 'none';
-                toggle.querySelector('span:last-child').textContent = isHidden ? '▾' : '▸';
+            toggle.onclick = function () {
+
+                const isHidden =
+                    content.style.display === 'none';
+
+                content.style.display =
+                    isHidden ? 'flex' : 'none';
+
+                toggle.querySelector('span:last-child').textContent =
+                    isHidden ? '▾' : '▸';
             };
 
             const pendingRefs = {};
 
             traceSteps.forEach(step => {
+
                 const item = document.createElement('div');
+
                 item.className = 'trace-item';
 
                 const tag = document.createElement('div');
+
                 tag.className = 'trace-step-tag';
+
                 tag.textContent = `${step.step}.`;
 
                 const text = document.createElement('div');
+
                 text.style.flex = "1";
 
-                if (step.type === 'approval_required' && step.content !== 'pending') {
-                    text.innerHTML = `<div><strong>Approval needed:</strong> ${step.content}</div>`;
-                    
+                if (
+                    step.type === 'approval_required' &&
+                    step.content !== 'pending'
+                ) {
+
+                    text.innerHTML =
+                        `<div><strong>Approval needed:</strong> ${step.content}</div>`;
+
                     const actions = document.createElement('div');
+
                     actions.className = 'approval-actions';
 
-                    const approveBtn = document.createElement('button');
+                    const approveBtn =
+                        document.createElement('button');
+
                     approveBtn.className = 'btn-yes';
+
                     approveBtn.textContent = 'Approve';
 
-                    const denyBtn = document.createElement('button');
+                    const denyBtn =
+                        document.createElement('button');
+
                     denyBtn.className = 'btn-no';
+
                     denyBtn.textContent = 'Deny';
 
-                    approveBtn.onclick = function() {
+                    approveBtn.onclick = function () {
+
                         actions.remove();
+
                         if (pendingRefs[step.tool_name]) {
-                            pendingRefs[step.tool_name].decision.textContent = 'Approved by user';
-                            pendingRefs[step.tool_name].decision.style.color = '#34d399';
+
+                            pendingRefs[step.tool_name]
+                                .decision.textContent =
+                                'Approved by user';
+
+                            pendingRefs[step.tool_name]
+                                .decision.style.color =
+                                '#34d399';
                         }
                     };
 
-                    denyBtn.onclick = function() {
+                    denyBtn.onclick = function () {
+
                         actions.remove();
+
                         if (pendingRefs[step.tool_name]) {
-                            pendingRefs[step.tool_name].decision.textContent = 'Denied by user';
-                            pendingRefs[step.tool_name].decision.style.color = '#f87171';
+
+                            pendingRefs[step.tool_name]
+                                .decision.textContent =
+                                'Denied by user';
+
+                            pendingRefs[step.tool_name]
+                                .decision.style.color =
+                                '#f87171';
                         }
                     };
 
                     actions.appendChild(approveBtn);
                     actions.appendChild(denyBtn);
+
                     text.appendChild(actions);
 
-                } else if (step.type === 'user_decision' && step.content === 'pending') {
-                    text.textContent = 'Awaiting decision...';
-                    text.style.color = '#9ca3af';
-                    if (!pendingRefs[step.tool_name]) pendingRefs[step.tool_name] = {};
-                    pendingRefs[step.tool_name].decision = text;
+                } else if (
+                    step.type === 'user_decision' &&
+                    step.content === 'pending'
+                ) {
+
+                    text.textContent =
+                        'Awaiting decision...';
+
+                    text.style.color =
+                        '#9ca3af';
+
+                    if (!pendingRefs[step.tool_name]) {
+                        pendingRefs[step.tool_name] = {};
+                    }
+
+                    pendingRefs[step.tool_name].decision =
+                        text;
 
                 } else {
-                    text.textContent = `${step.label}: ${step.content}`;
+
+                    text.textContent =
+                        `${step.label}: ${step.content}`;
                 }
 
                 item.appendChild(tag);
                 item.appendChild(text);
+
                 content.appendChild(item);
+
             });
 
             card.appendChild(toggle);
             card.appendChild(content);
+
             parentEl.appendChild(card);
-            chatBox.scrollTop = chatBox.scrollHeight;
+
+            chatBox.scrollTop =
+                chatBox.scrollHeight;
         }
 
         async function sendMessage() {
-            const text = userInput.value.trim();
-            const key = apiKeyInput.value.trim();
-            const temp = parseFloat(document.getElementById('temp-slider').value);
-            const file = imageInput.files[0];
 
-            if (text === "" && !file) return;
+            const text =
+                userInput.value.trim();
+
+            const key =
+                apiKeyInput.value.trim();
+
+            const temp =
+                parseFloat(
+                    document.getElementById('temp-slider').value
+                );
+
+            const file =
+                imageInput.files[0];
+
+            if (text === "" && !file) {
+                return;
+            }
 
             const currentText = text;
+
             userInput.value = '';
+
             let userBody = null;
 
             if (file) {
-                const reader = new FileReader();
-                reader.onload = async function() {
-                    const base64Image = reader.result.split(',')[1];
-                    const imageType = file.type;
-                    const localUrl = URL.createObjectURL(file);
-                    userBody = addMessage('user', currentText, localUrl);
-                    chatHistory.push({ role: 'user', text: currentText || "[Image]" });
-                    removeImage();
-                    await sendRequest(currentText, key, temp, base64Image, imageType, userBody);
-                };
+
+                const reader =
+                    new FileReader();
+
+                reader.onload =
+                    async function () {
+
+                        const base64Image =
+                            reader.result.split(',')[1];
+
+                        const imageType =
+                            file.type;
+
+                        const localUrl =
+                            URL.createObjectURL(file);
+
+                        userBody =
+                            addMessage(
+                                'user',
+                                currentText,
+                                localUrl
+                            );
+
+                        chatHistory.push({
+                            role: 'user',
+                            text: currentText || "[Image]"
+                        });
+
+                        removeImage();
+
+                        await sendRequest(
+                            currentText,
+                            key,
+                            temp,
+                            base64Image,
+                            imageType,
+                            userBody
+                        );
+                    };
+
                 reader.readAsDataURL(file);
+
             } else {
-                userBody = addMessage('user', currentText);
-                chatHistory.push({ role: 'user', text: currentText });
-                await sendRequest(currentText, key, temp, null, null, userBody);
+
+                userBody =
+                    addMessage(
+                        'user',
+                        currentText
+                    );
+
+                chatHistory.push({
+                    role: 'user',
+                    text: currentText
+                });
+
+                await sendRequest(
+                    currentText,
+                    key,
+                    temp,
+                    null,
+                    null,
+                    userBody
+                );
             }
         }
 
-        async function sendRequest(text, key, temp, base64, imgType, userBody) {
+        async function sendRequest(
+            text,
+            key,
+            temp,
+            base64,
+            imgType,
+            userBody
+        ) {
+
             try {
-                const useRag = document.getElementById('rag-toggle').checked;
-                const useMCP = document.getElementById('mcp-toggle').checked;
-                const filterCategory = document.getElementById('filter-category').value;
 
-                // Loading placeholder
-                const loadRow = document.createElement('div');
-                loadRow.className = 'message-row bot';
-                loadRow.id = 'loading';
-                loadRow.innerHTML = `<div class="msg-avatar ai">✦</div><div class="msg-body" style="color:#8e8e8e">Thinking...</div>`;
+                const useRag =
+                    document.getElementById(
+                        'rag-toggle'
+                    ).checked;
+
+                const useMCP =
+                    document.getElementById(
+                        'mcp-toggle'
+                    ).checked;
+
+                const filterCategory =
+                    document.getElementById(
+                        'filter-category'
+                    ).value;
+
+                const loadRow =
+                    document.createElement('div');
+
+                loadRow.className =
+                    'message-row bot';
+
+                loadRow.id =
+                    'loading';
+
+                loadRow.innerHTML =
+                    `<div class="msg-avatar ai">✦</div>
+                     <div class="msg-body"
+                          style="color:#8e8e8e">
+                          Thinking...
+                     </div>`;
+
                 chatBox.appendChild(loadRow);
-                chatBox.scrollTop = chatBox.scrollHeight;
 
-                const res = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-API-KEY': key },
-                    body: JSON.stringify({
-                        message: text, history: chatHistory, temperature: temp,
-                        image: base64, imageType: imgType,
-                        useRAG: useRag, useMCP: useMCP,
-                        filterCategory: filterCategory, filterRole: 'all', filterRule: 'must'
-                    })
-                });
+                chatBox.scrollTop =
+                    chatBox.scrollHeight;
 
-                const data = await res.json();
-                const loader = document.getElementById('loading');
-                if (loader) loader.remove();
+                /*
+                 * IMPORTANT:
+                 * Frontend is now hosted separately on Vercel.
+                 * Backend is hosted on Render.
+                 */
+
+                const res = await fetch(
+                    'https://evoluteiq-ai-mcp-chatbot.onrender.com/api/chat',
+                    {
+                        method: 'POST',
+
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-API-KEY': key
+                        },
+
+                        body: JSON.stringify({
+
+                            message: text,
+
+                            history: chatHistory,
+
+                            temperature: temp,
+
+                            image: base64,
+
+                            imageType: imgType,
+
+                            useRAG: useRag,
+
+                            useMCP: useMCP,
+
+                            filterCategory: filterCategory,
+
+                            filterRole: 'all',
+
+                            filterRule: 'must'
+                        })
+                    }
+                );
+
+                const data =
+                    await res.json();
+
+                const loader =
+                    document.getElementById(
+                        'loading'
+                    );
+
+                if (loader) {
+                    loader.remove();
+                }
 
                 if (!res.ok) {
-                    addMessage('bot', "Error: " + (data.error || "Request failed"));
-                    chatHistory.pop();
-                } else {
-                    const botBody = addMessage('bot', data.response);
-                    chatHistory.push({ role: 'model', text: data.response });
 
-                    if (data.agent_trace && data.agent_trace.length > 0) {
-                        renderTrace(data.agent_trace, botBody);
+                    addMessage(
+                        'bot',
+                        "Error: " +
+                        (
+                            data.error ||
+                            "Request failed"
+                        )
+                    );
+
+                    chatHistory.pop();
+
+                } else {
+
+                    const botBody =
+                        addMessage(
+                            'bot',
+                            data.response
+                        );
+
+                    chatHistory.push({
+                        role: 'model',
+                        text: data.response
+                    });
+
+                    if (
+                        data.agent_trace &&
+                        data.agent_trace.length > 0
+                    ) {
+
+                        renderTrace(
+                            data.agent_trace,
+                            botBody
+                        );
                     }
 
-                    if (data.sentiment && userBody) {
-                        const sMap = { positive: ' 😊', negative: ' 😢' };
+                    if (
+                        data.sentiment &&
+                        userBody
+                    ) {
+
+                        const sMap = {
+                            positive: ' 😊',
+                            negative: ' 😢'
+                        };
+
                         if (sMap[data.sentiment]) {
-                            const badge = document.createElement('span');
-                            badge.textContent = sMap[data.sentiment];
-                            badge.style.fontSize = '12px';
-                            userBody.appendChild(badge);
+
+                            const badge =
+                                document.createElement(
+                                    'span'
+                                );
+
+                            badge.textContent =
+                                sMap[data.sentiment];
+
+                            badge.style.fontSize =
+                                '12px';
+
+                            userBody.appendChild(
+                                badge
+                            );
                         }
                     }
                 }
+
             } catch (err) {
-                const loader = document.getElementById('loading');
-                if (loader) loader.remove();
-                addMessage('bot', "Error: " + err.message);
+
+                const loader =
+                    document.getElementById(
+                        'loading'
+                    );
+
+                if (loader) {
+                    loader.remove();
+                }
+
+                addMessage(
+                    'bot',
+                    "Error: " + err.message
+                );
+
                 chatHistory.pop();
             }
         }
 
-        sendBtn.onclick = sendMessage;
-        userInput.onkeydown = function(e) { if (e.key === 'Enter') sendMessage(); };
+        sendBtn.onclick =
+            sendMessage;
+
+        userInput.onkeydown =
+            function (e) {
+
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            };
+
     </script>
+
 </body>
 </html>
